@@ -26,21 +26,102 @@ static uint8_t 	Exponent(uint16_t value);
 
 
 /**
+ * @brief Initialize InputSignal structure passed by pointer.
+ *
+ * @param self
+ * @param arr_size
+ * @return
+ */
+uint8_t InputSignal_create(InputSignal* self, const uint8_t arr_size)
+{
+    self->arr_size = arr_size;
+
+    self->real_arr = malloc(arr_size * sizeof(*self->real_arr));
+    self->imag_arr = malloc(arr_size * sizeof(*self->imag_arr));
+
+    if (!self->real_arr || !self->imag_arr) {
+        fprintf(stderr, "Error allocating memory for at least one array\n");
+        free(self->real_arr);
+        free(self->imag_arr);
+        return 1;  // return error code
+    }
+
+    return 0;
+}
+
+
+/**
+ * @brief Free memory allocated for InputSignal and its members.
+ *
+ * @param self
+ * @return
+ */
+uint8_t InputSignal_destroy(InputSignal* self)
+{
+    free(self->real_arr);
+    free(self->imag_arr);
+    return 0;
+}
+
+
+/**
+ * @brief Initialize InputSignal structure passed by pointer.
+ *
+ * @param self
+ * @param fft_size
+ * @return
+ */
+uint8_t FTSignal_create(InputSignal* self, const uint8_t fft_size)
+{
+    self->fft_size = fft_size;
+
+    self->real_arr = malloc(arr_size * sizeof(*self->real_arr));
+    self->imag_arr = malloc(arr_size * sizeof(*self->imag_arr));
+
+    if (!self->real_arr || !self->imag_arr) {
+        fprintf(stderr, "Error allocating memory for at least one array\n");
+        free(self->real_arr);
+        free(self->imag_arr);
+        return 1;  // return error code
+    }
+
+    return 0;
+}
+
+
+/**
+ * @brief Free memory allocated for InputSignal and its members.
+ *
+ * @param self
+ * @return
+ */
+uint8_t FTSignal_destroy(InputSignal* self)
+{
+    free(self->real_arr);
+    free(self->imag_arr);
+    return 0;
+}
+
+
+/**
  * @brief MCU init
  *
- * @param vReal
- * @param vImag
- * @param samples
+ * @param real_arr
+ * @param imag_arr
+ * @param num_samples
  * @param sampling_frequency
  * @return
  */
-void mcufft_init(float* vReal, float* vImag, uint16_t samples, float sampling_frequency)
+uint8_t mcufft_init(
+	float* real_arr, float* imag_arr, uint16_t num_samples, float sampling_frequency
+)
 {
 	_vReal = vReal;
 	_vImag = vImag;
 	_samples = samples;
 	_sampling_frequency = sampling_frequency;
 	_power = Exponent(samples);
+	return 0;
 }
 
 
@@ -107,15 +188,90 @@ void mcufft_compute(uint8_t dir)
 
 
 /**
+ * @brief Remove the DC term from the input signal
+ *
+ * @param signal
+ * @param signal_size
+ * @return
+ */
+uint8_t mcufft_dc_removal(float* signal, uint16_t signal_size)
+{
+	// Compute the mean
+	float signal_sum = 0;
+	for (uint16_t i = 0; i < signal_size; i++) {
+		signal_sum += signal[i];
+	}
+	float signal_mean = signal_sum / signal_size;
+
+	// Subtract the mean
+	for (uint16_t i = 0; i < signal_size; i++) {
+		signal[i] -= signal_mean;
+	}
+
+	return 0;
+}
+
+
+/**
  * @brief Compute the magnitude of the complex number
  *
  * @return
  */
-void mcufft_complex_to_magnitude(void)
+uint8_t mcufft_complex_to_magnitude(void)
 { // vM is half the size of vReal and vImag
 	for (uint16_t i = 0; i < _samples; i++) {
 		_vReal[i] = sqrt(sq(_vReal[i]) + sq(_vImag[i]));
 	}
+	return 0;
+}
+
+
+/**
+ * @brief Compute the magnitude of the complex number
+ * using the alpha max plus beta min algorithm
+ *
+ * Pythagorean addition approximation using the
+ * alpha max plus beta min algorithm
+ *
+ * Approximate the magnitude of a complex number z = a + b * i
+ * given the real (a) and imaginary (b) parts.
+ *
+ * https://github.com/andrestumpf/coregis_public/blob/46479157cc8ab44299b1f61a31e7a575f76909a1/mpic/src/func.c#L1424
+ *
+ * @param real_arr
+ * @param image_arr
+ * @param arr_size
+ * @return
+ */
+uint8_t mcufft_complex_to_magnitude_approximation(
+	float* real_arr, float* image_arr, uint16_t arr_size
+)
+{
+	// implementation of alpha max plus beta min algorithm
+	// largest error: 3.96%, mean error: 2.41% 
+	float min;
+  float max;
+  const float alpha = 0.96043387F;
+  const float beta = 0.39782473F;
+
+  for (uint16_t i = 0; i < arr_size; i++) {
+    float re = real_arr[i];
+    float im = imag_arr[i];
+
+    if (re < 0) re = -re;
+    if (im < 0) im = -im;
+    if (re > im) {
+			max = re;
+			min = im;
+    } else {
+			min = re;
+			max = im;
+    }
+
+    real_arr[i] = alpha * max + beta * min;
+  }
+
+  return 0;
 }
 
 
@@ -126,7 +282,7 @@ void mcufft_complex_to_magnitude(void)
  * @param dir
  * @return
  */
-void mcufft_windowing(uint8_t windowType, uint8_t dir)
+uint8_t mcufft_windowing(uint8_t windowType, uint8_t dir)
 {// Weighing factors are computed once before multiple use of FFT
 // The weighing function is symetric; half the weighs are recorded
 	float samplesMinusOne = ((float)(_samples) - 1.0);
@@ -176,37 +332,7 @@ void mcufft_windowing(uint8_t windowType, uint8_t dir)
 			_vReal[_samples - (i + 1)] /= weighingFactor;
 		}
 	}
-}
-
-
-/**
- * @brief Major Peak
- *
- * @param mag_out
- * @param freq_out
- * @param mag_fact
- * @return
- */
-void mcufft_major_peak(float* mag_out, float* freq_out, float mag_fact)
-{
-	float maxY = 0;
-	uint16_t IndexOfMaxY = 0;
-
-	for (uint16_t i = 1; i < ((_samples >> 1) + 1); i++) {
-		if ((_vReal[i - 1] < _vReal[i]) && (_vReal[i] > _vReal[i + 1])) {
-			if (_vReal[i] > maxY) {
-				maxY = _vReal[i];
-				IndexOfMaxY = i;
-			}
-		}
-	}
-	float delta = 0.5 * ((_vReal[IndexOfMaxY - 1] - _vReal[IndexOfMaxY + 1]) / (_vReal[IndexOfMaxY - 1] - (2.0 * _vReal[IndexOfMaxY]) + _vReal[IndexOfMaxY + 1]));
-	float interpolatedX = ((IndexOfMaxY + delta)  * _sampling_frequency) / (_samples - 1);
-	if(IndexOfMaxY == (_samples >> 1))
-		interpolatedX = ((IndexOfMaxY + delta)  * _sampling_frequency) / (_samples);
-
-	*mag_out = _vReal[IndexOfMaxY] / mag_fact;
-	*freq_out = interpolatedX;
+	return 0;
 }
 
 
@@ -248,3 +374,4 @@ void Swap(float* x, float* y)
 	*x = *y;
 	*y = temp;
 }
+

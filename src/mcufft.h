@@ -20,17 +20,49 @@ extern "C" {
 #define FFT_WIN_TYP_TRIANGLE 			0x03  /* triangle (Bartlett) */
 #define FFT_WIN_TYP_NUTTALL 			0x04  /* nuttall */
 #define FFT_WIN_TYP_BLACKMAN 			0x05  /* blackman */
-#define FFT_WIN_TYP_BLACKMAN_NUTTALL 	0x06  /* blackman nuttall */
+#define FFT_WIN_TYP_BLACKMAN_NUTTALL     0x06  /* blackman nuttall */
 #define FFT_WIN_TYP_BLACKMAN_HARRIS 	0x07  /* blackman harris*/
 #define FFT_WIN_TYP_FLT_TOP 			0x08  /* flat top */
 #define FFT_WIN_TYP_WELCH 				0x09  /* welch */
 
 
+/**
+ * @brief Input signal; typically time or spatial domain signal
+ *
+ */
+typedef struct {
+    float* real_arr;
+    float* imag_arr;
+    uint16_t arr_size;
+} InputSignal;
+
+
+uint8_t InputSignal_create(InputSignal* self, uint8_t arr_size);
+uint8_t InputSignal_destroy(InputSignal* self);
+
+
+/**
+ * @brief Fourier transform signal (frequency domain representation)
+ *
+ */
+typedef struct {
+    float* real_arr;
+    float* imag_arr;
+    uint16_t fft_size;
+} FTSignal;
+
+
+uint8_t FTSignal_create(InputSignal* self, uint8_t fft_size);
+uint8_t FTSignal_destroy(InputSignal* self);
+
+
 void mcufft_init(float *vReal, float *vImag, uint16_t samples, float samplingFrequency);
+
 void mcufft_windowing(uint8_t windowType, uint8_t dir);
+
 void mcufft_compute(uint8_t dir);
+
 void mcufft_complex_to_magnitude(void);
-void mcufft_major_peak(float* mag_out, float* freq_out, float magFact);
 
 
 uint8_t	mcufft_lib_revision(void);
@@ -42,3 +74,4 @@ uint8_t	mcufft_lib_revision(void);
 
 
 #endif  // mcufft_h
+
